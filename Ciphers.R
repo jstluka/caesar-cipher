@@ -4,7 +4,7 @@ library(tidyverse)
 library(cipheR)
 library(igraph)
 
-dictionary <- read.csv("/Users/jimmystluka/Downloads/Coding Projects/Scrabble_TWL06.csv")
+dictionary <- read_csv("data/Scrabble_TWL06.csv")
 
 # Create the Caesar cipher dictionary
 cipher_dict <- c(
@@ -17,7 +17,7 @@ cipher_dict <- c(
   "y" = "z", "z" = "a"
 )
 
-# Initialize the data frame
+# Initialize the data frame (Cipher 0)
 all_ciphers <- dictionary
 
 # Loop through the 25 cipher iterations
@@ -33,7 +33,7 @@ for (i in 1:25) {
   )
 }
 
-# find matching words between ciphers
+# Find matching words between ciphers
 {
 word1_list <- intersect(all_ciphers$word, all_ciphers$word1)
 word2_list <- intersect(all_ciphers$word, all_ciphers$word2)
@@ -104,21 +104,6 @@ matches$original_word <- mapply(
 # Sort alphabetically by original word
 matches <- arrange(matches, original_word)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-# IGRAPH LOGIC
-
 # Create a graph from the word matches
 g <- graph_from_data_frame(
   matches %>%
@@ -140,81 +125,3 @@ result <- tibble(
     .groups = "drop"
   ) %>%
   select(words)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# GROUPS LOGIC
-
-# Get all unique words
-words <- tibble(
-  word = unique(c(matches$original_word, matches$ciphered_word))
-)
-
-# Initially, each word belongs to its own group
-groups <- words %>%
-  mutate(group = row_number())
-
-# Repeatedly merge groups that have connected words
-repeat {
-  updated <- matches %>%
-    left_join(groups, by = c("original_word" = "word")) %>%
-    rename(group_from = group) %>%
-    left_join(groups, by = c("ciphered_word" = "word")) %>%
-    rename(group_to = group) %>%
-    mutate(group = pmin(group_from, group_to)) %>%
-    select(original_word, group) %>%
-    group_by(original_word) %>%
-    summarise(group = min(group), .groups = "drop")
-  
-  new_groups <- groups %>%
-    left_join(updated, by = c("word" = "original_word")) %>%
-    mutate(group = coalesce(group.y, group.x)) %>%
-    select(word, group)
-  
-  # Propagate the smallest group ID across connected words
-  new_groups <- new_groups %>%
-    left_join(
-      matches %>%
-        left_join(new_groups, by = c("original_word" = "word")) %>%
-        rename(group_from = group) %>%
-        left_join(new_groups, by = c("ciphered_word" = "word")) %>%
-        rename(group_to = group) %>%
-        group_by(original_word) %>%
-        summarise(group = min(group_from, group_to), .groups = "drop"),
-      by = c("word" = "original_word"),
-      suffix = c("", ".new")
-    ) %>%
-    mutate(group = pmin(group, coalesce(group.new, group))) %>%
-    select(word, group)
-  
-  if (identical(groups$group, new_groups$group)) break
-  
-  groups <- new_groups
-}
-
-# Produce one row per connected group
-result <- groups %>%
-  group_by(group) %>%
-  summarise(
-    words = paste(sort(unique(word)), collapse = ", "),
-    .groups = "drop"
-  )
